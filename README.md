@@ -1,3 +1,107 @@
+# Lab 7: Web Programming - Modul 5: Pagination dan Pencarian
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada implementasi fitur pembatasan halaman (Pagination) dan pencarian data artikel pada halaman admin.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep dasar dan fungsi **Pagination** untuk membatasi tampilan data yang banyak.
+2. Memahami konsep dasar fitur **Pencarian** data.
+3. Mampu membuat Paging dan Pencarian secara dinamis menggunakan library bawaan **CodeIgniter 4**.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Membuat Pagination
+Pagination merupakan proses yang digunakan untuk membatasi tampilan data yang panjang dari database pada sebuah website. Pada praktikum ini, data artikel dibatasi maksimal 10 record per halaman.
+
+* **Modifikasi Controller:** Buka file Controller `Artikel.php`, lalu sesuaikan method `admin_index()` menjadi seperti berikut:
+
+```php
+public function admin_index()
+{
+    $title = 'Daftar Artikel';
+    $model = new ArtikelModel();
+    
+    $data = [
+        'title'   => $title,
+        'artikel' => $model->paginate(10), // data dibatasi 10 record per halaman
+        'pager'   => $model->pager,
+    ];
+    
+    return view('artikel/admin_index', $data);
+}
+
+```
+
+* **Modifikasi View:** Buka file `views/artikel/admin_index.php` dan tambahkan kode pemanggil links pager tepat di bawah deklarasi tabel data:
+
+```php
+<?= $pager->links(); ?>
+
+```
+
+#### 📸 Hasil Pagination
+
+Berikut adalah tampilan halaman admin setelah fungsi pagination diterapkan (tambahkan data baru untuk melihat navigasi halaman):
+
+---
+
+### 2. Membuat Fitur Pencarian Data
+
+Pencarian data digunakan untuk menyaring atau memfilter data artikel berdasarkan kata kunci tertentu yang diinputkan oleh user.
+
+* **Modifikasi Kembali Controller:** Ubah method `admin_index()` pada Controller `Artikel.php` agar dapat menangkap query pencarian `q` dan menyaring data menggunakan method `like()`:
+
+```php
+public function admin_index()
+{
+    $title = 'Daftar Artikel';
+    $q = $this->request->getVar('q') ?? '';
+    $model = new ArtikelModel();
+    
+    $data = [
+        'title'   => $title,
+        'q'       => $q,
+        'artikel' => $model->like('judul', $q)->paginate(10), // data dibatasi 10 record per halaman
+        'pager'   => $model->pager,
+    ];
+    
+    return view('artikel/admin_index', $data);
+}
+
+```
+
+* **Menambahkan Form Pencarian pada View:** Buka kembali file `views/artikel/admin_index.php`, lalu tambahkan form pencarian berikut tepat sebelum deklarasi tabel:
+
+```html
+<form method="get" class="form-search">
+    <input type="text" name="q" value="<?= $q; ?>" placeholder="Cari data">
+    <input type="submit" value="Cari" class="btn btn-primary">
+</form>
+
+```
+
+* **Modifikasi Link Pager:** Ubah kode pemanggil links pager sebelumnya agar tetap mempertahankan parameter pencarian `q` saat berpindah halaman:
+
+```php
+<?= $pager->only(['q'])->links(); ?>
+
+```
+
+#### 📸 Hasil Pencarian Data
+
+Berikut adalah tampilan halaman admin ketika melakukan pencarian data artikel berdasarkan kata kunci:
+
+---
+
+## 📝 Kesimpulan
+
+Dengan memanfaatkan library bawaan CodeIgniter 4, pembuatan fitur pagination dan pencarian menjadi jauh lebih efisien. Penggunaan method `$model->paginate()` secara otomatis mengontrol *offset* data, sementara `$pager->only(['q'])->links()` memastikan query pencarian tetap aktif dan tidak hilang saat user melakukan navigasi antar halaman (*paging*).
+
+```
+
+```
+
 # Lab 7: Web Programming - Modul 6: Login dan Autentikasi
 
 Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada pembuatan fitur autentikasi pengguna (Login) guna membatasi hak akses pada halaman administrasi.
