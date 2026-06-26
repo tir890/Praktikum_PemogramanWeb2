@@ -460,4 +460,173 @@ public function admin_index()
 
 Melalui praktikum di Modul 7 ini, sistem autentikasi diperkuat dengan pemanfaatan **Flashdata Session** untuk mengirimkan feedback error secara langsung kepada pengguna jika proses login gagal. Validasi status session di sisi Controller memastikan bahwa modul-modul administrasi data artikel tetap aman dari akses pengguna luar yang belum terautentikasi.
 
+---
+
+# Lab 7: Web Programming - Modul 8: Asynchronous JavaScript and XML (AJAX)
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada implementasi teknologi AJAX untuk memuat dan memanipulasi data artikel secara dinamis tanpa melakukan reload halaman keseluruhan.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep dasar AJAX (Asynchronous JavaScript and XML) dan mekanisme cara kerjanya.
+2. Mampu mengimplementasikan pemanggilan data dari server menggunakan library jQuery AJAX pada CodeIgniter 4.
+3. Mengembangkan fungsi manipulasi data (seperti hapus data) secara asynchronous dan menangani respons berformat JSON.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Persiapan & Menambahkan Pustaka jQuery
+Praktikum ini menggunakan library **jQuery** untuk mempermudah penulisan sintaks penanganan AJAX.
+
+* Unduh pustaka jQuery versi terbaru melalui situs resminya ([jquery.com](https://jquery.com)).
+* Letakkan atau salin berkas `jquery-3.6.0.min.js` (atau versi yang kamu gunakan) ke dalam direktori project kamu pada folder:
+  `public/assets/js/jquery-3.6.0.min.js`
+
+---
+
+### 2. Membuat AJAX Controller
+Controller baru dibuat khusus untuk menangani request asynchronous dan mengembalikan data dalam bentuk format JSON, bukan file view HTML utuh.
+
+* Buat file baru bernama `AjaxController.php` di dalam folder `app/Controllers/` dan masukkan kode berikut:
+
+```php
+<?php 
+namespace App\Controllers;
+
+use CodeIgniter\Controller;
+use CodeIgniter\HTTP\Request;
+use CodeIgniter\HTTP\Response;
+use App\Models\ArtikelModel;
+
+class AjaxController extends Controller 
+{
+    public function index() 
+    {
+        return view('ajax/index');
+    }
+
+    // Mengambil semua data artikel dan mengembalikannya dalam format JSON
+    public function getData() 
+    {
+        $model = new ArtikelModel();
+        $data = $model->findAll();
+        return $this->response->setJSON($data);
+    }
+
+    // Menghapus data artikel berdasarkan ID melalui request AJAX
+    public function delete($id) 
+    {
+        $model = new ArtikelModel();
+        $model->delete($id);
+        
+        $data = [
+            'status' => 'OK'
+        ];
+        return $this->response->setJSON($data);
+    }
+}
+
+```
+
+---
+
+### 3. Membuat View AJAX (Menampilkan & Menghapus Data)
+
+Halaman view ini memuat tabel kosong yang kemudian diisi secara dinamis oleh JavaScript/jQuery setelah data berhasil ditarik dari server melalui *endpoint* `getData()`.
+
+* Buat folder baru bernama `ajax` di dalam `app/Views/`, lalu buat file `index.php` di dalamnya:
+
+```html
+<?= $this->include('template/header'); ?>
+
+<h1>Data Artikel (Fitur AJAX)</h1>
+<table class="table-data" id="artikelTable">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Judul</th>
+            <th>Status</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        </tbody>
+</table>
+
+<script src="<?= base_url('assets/js/jquery-3.6.0.min.js') ?>"></script>
+
+<script>
+$(document).ready(function() {
+    
+    // Fungsi untuk memunculkan pesan loading selama proses fetch data berlangsung
+    function showLoadingMessage() {
+        $('#artikelTable tbody').html('<tr><td colspan="4">Loading data...</td></tr>');
+    }
+
+    // Fungsi utama untuk memuat data artikel secara asynchronous
+    function loadData() {
+        showLoadingMessage();
+        
+        $.ajax({
+            url: "<?= base_url('ajax/getData') ?>",
+            method: "GET",
+            dataType: "json",
+            success: function(data) {
+                var tableBody = "";
+                for (var i = 0; i < data.length; i++) {
+                    var row = data[i];
+                    tableBody += '<tr>';
+                    tableBody += '<td>' + row.id + '</td>';
+                    tableBody += '<td>' + row.judul + '</td>';
+                    tableBody += '<td><span class="status">---</span></td>'; // Placeholder status
+                    tableBody += '<td>';
+                    tableBody += '<a href="<?= base_url('artikel/edit/') ?>' + row.id + '" class="btn btn-primary">Edit</a> ';
+                    tableBody += '<a href="#" class="btn btn-danger btn-delete" data-id="' + row.id + '">Delete</a>';
+                    tableBody += '</td>';
+                    tableBody += '</tr>';
+                }
+                $('#artikelTable tbody').html(tableBody);
+            }
+        });
+    }
+
+    // Panggil fungsi loadData saat pertama kali halaman dibuka
+    loadData();
+
+    // Logika event trigger untuk menghapus artikel secara asynchronous
+    $(document).on('click', '.btn-delete', function(e) {
+        e.preventDefault();
+        var id = $(this).data('id');
+        
+        if (confirm('Apakah Anda yakin ingin menghapus artikel ini?')) {
+            $.ajax({
+                url: "<?= base_url('ajax/delete/') ?>" + id,
+                method: "DELETE",
+                success: function(data) {
+                    // Muat ulang data tabel tanpa harus reload halaman browser
+                    loadData(); 
+                },
+                error: function (jqXHR, textStatus, errorThrown) {
+                    alert('Error ketika menghapus artikel: ' + textStatus + ' - ' + errorThrown);
+                }
+            });
+        }
+    });
+});
+</script>
+
+<?= $this->include('template/footer'); ?>
+
+```
+
+#### 📸 Hasil Pengujian Fitur AJAX
+
+Berikut adalah tampilan halaman artikel ketika dimuat menggunakan mekanisme penanganan data berbasis AJAX:
+
+---
+
+## 📝 Kesimpulan
+
+Penerapan **AJAX (Asynchronous JavaScript and XML)** di CodeIgniter 4 secara signifikan mampu meningkatkan *User Experience* (UX) karena pembaruan konten tabel dan aksi hapus data terjadi di latar belakang (*background*) tanpa memaksa browser memuat ulang (*reload*) keseluruhan halaman. Penanganan data dari server dijembatani menggunakan representasi objek data terstruktur berformat **JSON** melalui method `$this->response->setJSON()`.
+
 ```
