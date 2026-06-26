@@ -303,3 +303,161 @@ Proses autentikasi pada CodeIgniter 4 dapat dikelola dengan mudah menggunakan **
 3. Jika sudah siap, silakan unggah berkas **Modul 7**!
 
 ```
+
+# Lab 7: Web Programming - Modul 7: Kelanjutan Fitur Login dan Autentikasi
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada penyempurnaan fitur login, penanganan validasi form login, serta manajemen session untuk proteksi halaman admin.
+
+## 📌 Tujuan Praktikum
+1. Memahami alur pengamanan halaman web menggunakan session secara mendalam.
+2. Mampu membuat sistem validasi masukan (input validation) pada form login.
+3. Mengimplementasikan fungsi pembatasan hak akses (hak administrator) dan fitur logout.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Membuat Halaman Login (Views)
+Halaman login dibuat untuk memfasilitasi pengguna dalam memasukkan *username* dan *password* mereka.
+
+* **Membuat File View:** Buat atau pastikan file `login.php` berada di dalam folder `app/Views/user/` dengan kode sebagai berikut:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login Portal Berita</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <div id="login-wrapper">
+        <h1>Sign In</h1>
+        
+        <?php if(session()->getFlashdata('msg')):?>
+            <div class="alert alert-danger">
+                <?= session()->getFlashdata('msg') ?>
+            </div>
+        <?php endif;?>
+        
+        <form action="/user/login" method="post">
+            <div class="mb-3">
+                <label for="InputForEmail" class="form-label">Username</label>
+                <input type="text" name="username" class="form-control" id="InputForEmail" value="<?= set_value('username') ?>">
+            </div>
+            <div class="mb-3">
+                <label for="InputForPassword" class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" id="InputForPassword">
+            </div>
+            <button type="submit" class="btn btn-primary">Login</button>
+        </form>
+    </div>
+</body>
+</html>
+
+```
+
+---
+
+### 2. Membuat Controller User & Proses Autentikasi
+
+Controller ini berfungsi memproses data kiriman dari form login, memeriksa kecocokan data ke model, dan mengeset data session jika autentikasi berhasil.
+
+* **Membuat/Modifikasi Controller:** Pastikan file `User.php` pada folder `app/Controllers/` berisi logika pengecekan password dan pengaturan session berikut:
+
+```php
+<?php
+namespace App\Controllers;
+use App\Models\UserModel;
+
+class User extends BaseController
+{
+    public function login()
+    {
+        $session = session();
+        $model = new UserModel();
+        $username = $this->request->getVar('username');
+        $password = $this->request->getVar('password');
+        
+        if ($username) {
+            $data = $model->where('username', $username)->first();
+            if ($data) {
+                $pass = $data['password'];
+                
+                // Melakukan verifikasi password (disesuaikan dengan skema enkripsi database)
+                $verify_pass = ($password === $pass);
+                
+                if ($verify_pass) {
+                    $ses_data = [
+                        'id'       => $data['id'],
+                        'username' => $data['username'],
+                        'logged_in'=> TRUE
+                    ];
+                    $session->set($ses_data);
+                    return redirect()->to('/admin/artikel');
+                } else {
+                    $session->setFlashdata('msg', 'Password Salah');
+                    return redirect()->to('/user/login');
+                }
+            } else {
+                $session->setFlashdata('msg', 'Username Tidak Ditemukan');
+                return redirect()->to('/user/login');
+            }
+        }
+        return view('user/login');
+    }
+
+    // Fungsi untuk menghapus session saat user keluar sistem
+    public function logout()
+    {
+        $session = session();
+        $session->destroy();
+        return redirect()->to('/user/login');
+    }
+}
+
+```
+
+#### 📸 Hasil Tampilan Login & Validasi Error
+
+Berikut adalah tampilan antarmuka form login serta penanganan kondisi saat data login yang dimasukkan tidak valid:
+
+---
+
+### 3. Mengamankan Controller Admin (Artikel)
+
+Untuk mencegah akses ilegal langsung melalui pengetikan URL di browser, tambahkan pemeriksaan status `logged_in` pada method admin di Controller `Artikel.php`.
+
+* **Implementasi Proteksi Session:**
+
+```php
+public function admin_index()
+{
+    // Memeriksa status login user
+    if (!session()->get('logged_in')) {
+        return redirect()->to('/user/login');
+    }
+
+    $title = 'Daftar Artikel';
+    $q = $this->request->getVar('q') ?? '';
+    $model = new ArtikelModel();
+    
+    $data = [
+        'title'   => $title,
+        'q'       => $q,
+        'artikel' => $model->like('judul', $q)->paginate(10),
+        'pager'   => $model->pager,
+    ];
+    
+    return view('artikel/admin_index', $data);
+}
+
+```
+
+---
+
+## 📝 Kesimpulan
+
+Melalui praktikum di Modul 7 ini, sistem autentikasi diperkuat dengan pemanfaatan **Flashdata Session** untuk mengirimkan feedback error secara langsung kepada pengguna jika proses login gagal. Validasi status session di sisi Controller memastikan bahwa modul-modul administrasi data artikel tetap aman dari akses pengguna luar yang belum terautentikasi.
+
+```
