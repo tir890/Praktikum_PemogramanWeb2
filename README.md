@@ -1239,3 +1239,255 @@ Berikut adalah tampilan halaman depan dashboard yang dikelola secara penuh mengg
 ## 📝 Kesimpulan
 
 Melalui praktikum Modul 11 ini, pembuatan antarmuka aplikasi menjadi sangat interaktif berkat penerapan **VueJS 3**. Fitur *reactive data binding* (`v-model`) mempermudah sinkronisasi inputan form secara berkala, sementara direktif struktural seperti `v-for` dan `v-if` mengotomatisasi rendering list tabel data dan penataan kondisi modal *pop-up* secara instan langsung dari data JSON hasil request fungsi `fetch()`.
+
+# Lab 8: Web Programming - Modul 12: VueJS Komponen dan Routing (Single Page Application)
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework VueJS 3** pada folder `lab8_vuejs`. Modul ini berfokus pada pemecahan kode antarmuka menjadi komponen modular yang dapat digunakan kembali (*reusable*) serta implementasi *Client-Side Routing* menggunakan **Vue Router** untuk membangun *Single Page Application* (SPA).
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep komponen modular pada Framework VueJS.
+2. Memahami konsep dasar *Client-Side Routing* untuk menghindari *hard-reload* halaman pada browser.
+3. Mampu mengimplementasikan integrasi Vue Router berbasis CDN pada aplikasi Frontend API.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Struktur Komponen Modular (JavaScript)
+Untuk menjaga kebersihan kode, tampilan antarmuka dipecah menjadi berkas komponen terisolasi di dalam folder proyek `lab8_vuejs`.
+
+* **Komponen Beranda / Home (`Home.js`):**
+  Buat file baru bernama `Home.js` untuk mengelola tampilan awal aplikasi:
+```javascript
+export default {
+    template: `
+        <div class="home-container">
+            <h2>Selamat Datang di Portal Berita</h2>
+            <p>Ini adalah halaman beranda aplikasi Frontend berbasis Single Page Application (SPA) menggunakan VueJS 3 dan Vue Router.</p>
+        </div>
+    `
+};
+
+```
+
+* **Komponen Kelola Artikel (`Artikel.php` / `Artikel.js`):**
+Pindahkan logika tabel data, modal tambah data, dan fungsi fetch API dari praktikum sebelumnya ke dalam file komponen khusus bernama `Artikel.js`:
+
+```javascript
+export default {
+    template: `
+        <div>
+            <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Kelola Data Artikel</h2>
+                <button @click="showModal = true" class="btn btn-primary">Tambah Data</button>
+            </header>
+
+            <table class="table-data">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Judul</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="row in artikel" :key="row.id">
+                        <td>{{ row.id }}</td>
+                        <td>{{ row.judul }}</td>
+                        <td><span class="status-badge" :class="row.status">{{ row.status }}</span></td>
+                        <td>
+                            <button class="btn btn-danger" @click="deleteArtikel(row.id)">Hapus</button>
+                        </td>
+                    </tr>
+                    <tr v-if="artikel.length === 0">
+                        <td colspan="4">Tidak ada data artikel.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div v-if="showModal" class="modal">
+                <div class="modal-content">
+                    <span class="close" @click="closeModal">&times;</span>
+                    <h3>Tambah Data Artikel</h3>
+                    <form @submit.prevent="saveArtikel">
+                        <p>
+                            <label>Judul</label>
+                            <input type="text" v-model="form.judul" required>
+                        </p>
+                        <p>
+                            <label>Isi Artikel</label>
+                            <textarea v-model="form.isi" required></textarea>
+                        </p>
+                        <p>
+                            <button type="submit" class="btn btn-success">Simpan</button>
+                            <button type="button" class="btn btn-secondary" @click="closeModal">Batal</button>
+                        </p>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `,
+    data() {
+        return {
+            artikel: [],
+            showModal: false,
+            apiUrl: 'http://localhost:8080/post',
+            form: { judul: '', isi: '' }
+        }
+    },
+    methods: {
+        fetchData() {
+            fetch(this.apiUrl)
+                .then(res => res.json())
+                .then(data => this.artikel = data)
+                .catch(err => console.error("Error API:", err));
+        },
+        saveArtikel() {
+            fetch(this.apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams(this.form)
+            })
+            .then(res => res.json())
+            .then(() => {
+                this.fetchData();
+                this.closeModal();
+            });
+        },
+        deleteArtikel(id) {
+            if (confirm("Hapus data ini?")) {
+                fetch(`${this.apiUrl}/${id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(() => this.fetchData());
+            }
+        },
+        closeModal() {
+            this.showModal = false;
+            this.form.judul = '';
+            this.form.isi = '';
+        }
+    },
+    mounted() {
+        this.fetchData();
+    }
+};
+
+```
+
+---
+
+### 2. Mengintegrasikan Vue Router pada Halaman Utama
+
+Ubah file `index.html` utama untuk memuat script Vue Router, mendaftarkan pemetaan rute URL, serta menyediakan tag `<router-link>` untuk navigasi dan `<router-view>` sebagai tempat render komponen dinamis.
+
+* Buka file `index.html` dan sesuaikan kodenya menjadi seperti berikut:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SPA Portal Berita - Vue Router</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <nav class="navbar">
+            <router-link to="/" class="nav-item">Beranda</router-link>
+            <router-link to="/artikel" class="nav-item">Kelola Artikel</router-link>
+        </nav>
+
+        <main class="content-wrapper">
+            <router-view></router-view>
+        </main>
+    </div>
+
+    <script src="[https://unpkg.com/vue@3/dist/vue.global.js](https://unpkg.com/vue@3/dist/vue.global.js)"></script>
+    <script src="[https://unpkg.com/vue-router@4/dist/vue-router.global.js](https://unpkg.com/vue-router@4/dist/vue-router.global.js)"></script>
+
+    <script type="module">
+        // Mengimpor file komponen modular
+        import Home from './Home.js';
+        import Artikel from './Artikel.js';
+
+        // 1. Definisikan pemetaan rute (Routes Mapping)
+        const routes = [
+            { path: '/', component: Home },
+            { path: '/artikel', component: Artikel }
+        ];
+
+        // 2. Inisialisasi instance Vue Router dengan mode Hash History
+        const router = VueRouter.createRouter({
+            history: VueRouter.createWebHashHistory(),
+            routes
+        });
+
+        // 3. Mount aplikasi Vue dan daftarkan routernya
+        const app = Vue.createApp({});
+        app.use(router);
+        app.mount('#app');
+    </script>
+</body>
+</html>
+
+```
+
+---
+
+### 3. Pembaruan Desain CSS Navigasi (style.css)
+
+Tambahkan style berikut ke dalam berkas `style.css` untuk mempercantik bilah navigasi menu serta memberikan penanda warna otomatis pada menu yang sedang aktif diklik (`.router-link-exact-active`).
+
+```css
+/* Style Tambahan untuk Navbar SPA */
+.navbar {
+    background-color: #2c3e50;
+    padding: 10px 20px;
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+.nav-item {
+    color: #ecf0f1;
+    text-decoration: none;
+    font-weight: bold;
+    padding: 5px 12px;
+    transition: background 0.3s;
+}
+.nav-item:hover {
+    background-color: #34495e;
+    border-radius: 4px;
+}
+
+/* Style otomatis dari Vue Router saat route sedang aktif dibuka */
+.router-link-exact-active {
+    background-color: #3152d6 !important;
+    color: #ffffff !important;
+    border-radius: 4px;
+}
+
+.home-container {
+    padding: 20px;
+    border: 1px solid #eff1ff;
+    background: #fafafa;
+    border-radius: 5px;
+}
+
+```
+
+#### 📸 Hasil Pengujian Sistem SPA (Single Page Application)
+
+Berikut adalah visualisasi perpindahan antar halaman menu yang berjalan secara instan di sisi klien tanpa memicu reload halaman pada browser:
+
+---
+
+## 📝 Kesimpulan
+
+Melalui praktikum Modul 12, aplikasi frontend telah sukses bertransformasi menjadi **Single Page Application (SPA)** menggunakan **Vue Router**. Dengan membagi antarmuka menjadi komponen terpisah (`Home.js` & `Artikel.js`), kode program menjadi lebih terstruktur. Pemanfaatan komponen penampung `<router-view>` memastikan bahwa proses transisi dan pergantian konten halaman web terasa sangat cepat, responsif, dan menghemat bandwidth server karena tidak memerlukan pemuatan ulang aset HTML eksternal.
+
+```
+
+---
+
+```
