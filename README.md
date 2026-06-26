@@ -825,6 +825,166 @@ Berikut adalah tampilan halaman administrasi artikel yang mengintegrasikan penca
 
 Melalui praktikum Modul 9 ini, fitur pencarian dan pagination ditingkatkan fungsionalitasnya dengan menggabungkan query relasional (`JOIN`) antara tabel `artikel` dan `kategori`. Dengan memanfaatkan penanganan event klik tautan (`event.preventDefault()`) dan manipulasi DOM menggunakan jQuery, transisi perpindahan halaman serta penyaringan data dapat berjalan mulus tanpa interupsi reload browser penuh.
 
+
+# Lab 7: Web Programming - Modul 10: Pembuatan RESTful API
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada implementasi RESTful API untuk menyediakan *resource* data artikel yang dapat dikonsumsi oleh aplikasi atau platform lain.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep dasar Application Programming Interface (API) dan arsitektur RESTful.
+2. Mampu membuat REST Server untuk melayani HTTP request (GET, POST, PUT, DELETE) menggunakan CodeIgniter 4.
+3. Mampu melakukan pengujian *endpoint* API menggunakan aplikasi REST Client (seperti Postman).
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Membuat Controller REST API
+CodeIgniter 4 menyediakan `ResponseTrait` untuk mempermudah pengembalian respons berformat JSON/XML dengan kode status HTTP yang sesuai.
+
+* Buat file baru bernama `Post.php` di dalam folder `app/Controllers/` dan masukkan kode berikut:
+
+```php
+<?php
+namespace App\Controllers;
+
+use CodeIgniter\RESTful\ResourceController;
+use CodeIgniter\API\ResponseTrait;
+use App\Models\ArtikelModel;
+
+class Post extends ResourceController
+{
+    use ResponseTrait;
+
+    // GET: Menampilkan semua data artikel
+    public function index()
+    {
+        $model = new ArtikelModel();
+        $data = $model->findAll();
+        return $this->respond($data, 200);
+    }
+
+    // GET: Menampilkan detail artikel berdasarkan ID
+    public function show($id = null)
+    {
+        $model = new ArtikelModel();
+        $data = $model->getWhere(['id' => $id])->getResult();
+        
+        if ($data) {
+            return $this->respond($data, 200);
+        } else {
+            return $this->failNotFound('Data artikel tidak ditemukan untuk ID: ' . $id);
+        }
+    }
+
+    // POST: Menambah data artikel baru
+    public function create()
+    {
+        $model = new ArtikelModel();
+        $data = [
+            'judul' => $this->request->getVar('judul'),
+            'isi'   => $this->request->getVar('isi'),
+            'slug'  => url_title($this->request->getVar('judul'), '-', true)
+        ];
+        
+        $model->insert($data);
+        $response = [
+            'status'   => 201,
+            'error'    => null,
+            'messages' => [
+                'success' => 'Data artikel berhasil ditambahkan.'
+            ]
+        ];
+        return $this->respondCreated($response);
+    }
+
+    // PUT/PATCH: Memperbarui data artikel berdasarkan ID
+    public function update($id = null)
+    {
+        $model = new ArtikelModel();
+        $json = $this->request->getJSON();
+        
+        if ($json) {
+            $data = [
+                'judul' => $json->judul,
+                'isi'   => $json->isi,
+                'slug'  => url_title($json->judul, '-', true)
+            ];
+        } else {
+            $data = [
+                'judul' => $this->request->getRawInput()['judul'],
+                'isi'   => $this->request->getRawInput()['isi'],
+                'slug'  => url_title($this->request->getRawInput()['judul'], '-', true)
+            ];
+        }
+
+        $model->update($id, $data);
+        $response = [
+            'status'   => 200,
+            'error'    => null,
+            'messages' => [
+                'success' => 'Data artikel berhasil diperbarui.'
+            ]
+        ];
+        return $this->respond($response);
+    }
+
+    // DELETE: Menghapus data artikel berdasarkan ID
+    public function delete($id = null)
+    {
+        $model = new ArtikelModel();
+        $data = $model->find($id);
+        
+        if ($data) {
+            $model->delete($id);
+            $response = [
+                'status'   => 200,
+                'error'    => null,
+                'messages' => [
+                    'success' => 'Data artikel berhasil dihapus.'
+                ]
+            ];
+            return $this->respondDeleted($response);
+        } else {
+            return $this->failNotFound('Data tidak ditemukan untuk ID: ' . $id);
+        }
+    }
+}
+
 ```
 
 ---
+
+### 2. Konfigurasi Routing RESTful API
+
+Untuk memetakan request HTTP secara otomatis ke dalam method CRUD di controller `Post.php`, kita daftarkan *resource* routes pada konfigurasi aplikasi.
+
+* Buka file `app/Config/Routes.php` dan tambahkan baris kode berikut:
+
+```php
+$routes->resource('post');
+
+```
+
+*Dengan sintaks ini, URL `http://localhost:8080/post` otomatis mendukung method GET, POST, PUT, dan DELETE.*
+
+---
+
+### 3. Pengujian RESTful API menggunakan Postman
+
+Pengujian dilakukan untuk mensimulasikan permintaan dari client aplikasi lain:
+
+* **Mendapatkan Semua Data (GET):** Akses URL `http://localhost:8080/post` dengan method `GET`. Server akan mengembalikan seluruh data dalam struktur JSON dengan status `200 OK`.
+* **Menambahkan Data Baru (POST):** Akses URL `http://localhost:8080/post` dengan method `POST`. Isikan parameter `judul` dan `isi` pada bagian body request. Server akan merespons dengan status `201 Created`.
+* **Mengubah Data (PUT):** Akses URL data spesifik (misal ID 4): `http://localhost:8080/post/4` dengan method `PUT`. Kirimkan data baru melalui raw JSON atau x-www-form-urlencoded untuk memperbarui data artikel.
+* **Menghapus Data (DELETE):** Akses URL data spesifik (misal ID 4): `http://localhost:8080/post/4` menggunakan method `DELETE`. Jika berhasil, server mengembalikan pesan sukses dan status `200 OK`.
+
+#### 📸 Hasil Pengujian API
+
+Berikut adalah contoh tangkapan layar pengujian penghapusan resource data melalui client API:
+
+---
+
+## 📝 Kesimpulan
+
+Penyediaan arsitektur **RESTful API** pada CodeIgniter 4 dapat diimplementasikan secara instan berkat tersedianya class `ResourceController` dan `ResponseTrait`. Format keluaran berupa data terstruktur **JSON** dengan kode status HTTP (*HTTP Status Codes*) standar memastikan bahwa sistem backend ini siap berinteraksi dan berintegrasi secara aman dengan berbagai macam platform frontend independent maupun aplikasi mobile.
