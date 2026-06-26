@@ -988,3 +988,254 @@ Berikut adalah contoh tangkapan layar pengujian penghapusan resource data melalu
 ## 📝 Kesimpulan
 
 Penyediaan arsitektur **RESTful API** pada CodeIgniter 4 dapat diimplementasikan secara instan berkat tersedianya class `ResourceController` dan `ResponseTrait`. Format keluaran berupa data terstruktur **JSON** dengan kode status HTTP (*HTTP Status Codes*) standar memastikan bahwa sistem backend ini siap berinteraksi dan berintegrasi secara aman dengan berbagai macam platform frontend independent maupun aplikasi mobile.
+
+
+# Lab 8: Web Programming - Modul 11: Frontend API menggunakan VueJS 3
+
+Repository ini merupakan bagian dari praktikum pemrograman web pada folder `lab8_vuejs`. Modul ini berfokus pada pembuatan aplikasi sisi depan (*Frontend*) berbasis komponen menggunakan **Framework VueJS 3** untuk mengonsumsi, menampilkan, dan memanipulasi data artikel dari RESTful API backend (CodeIgniter 4).
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep dasar arsitektur Single Page Application (SPA) dan Framework VueJS.
+2. Mampu melakukan integrasi data dari REST Server ke dalam View-Layer secara reaktif.
+3. Mampu membuat komponen antarmuka interaktif seperti penanganan Form Input dan Modal Pop-up menggunakan VueJS.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Struktur Proyek Frontend
+Praktikum ini dibuat secara terpisah dari folder backend di dalam folder khusus bernama `lab8_vuejs`. Di dalamnya, fungsionalitas diintegrasikan langsung menggunakan CDN VueJS untuk kesederhanaan implementasi.
+
+---
+
+### 2. Membuat Halaman Utama dan Integrasi VueJS
+Halaman ini bertindak sebagai kerangka utama tempat aplikasi Vue di-mount (`#app`) serta memuat pustaka JavaScript yang diperlukan.
+
+* Buat file bernama `index.html` pada folder proyek `lab8_vuejs` dan tambahkan struktur dasar berikut:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Artikel - VueJS Frontend</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Daftar Artikel</h1>
+            <button @click="showModal = true" class="btn btn-primary">Tambah Data</button>
+        </header>
+
+        <table class="table-data">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Judul</th>
+                    <th>Status</th>
+                    <th>Aksi</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="row in artikel" :key="row.id">
+                    <td>{{ row.id }}</td>
+                    <td>{{ row.judul }}</td>
+                    <td><span class="status-badge" :class="row.status">{{ row.status }}</span></td>
+                    <td>
+                        <button class="btn btn-danger" @click="deleteArtikel(row.id)">Hapus</button>
+                    </td>
+                </tr>
+                <tr v-if="artikel.length === 0">
+                    <td colspan="4">Tidak ada data artikel atau server mati.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div v-if="showModal" class="modal">
+            <div class="modal-content">
+                <span class="close" @click="closeModal">&times;</span>
+                <h2>Tambah Data Artikel</h2>
+                <form @submit.prevent="saveArtikel">
+                    <p>
+                        <label>Judul</label>
+                        <input type="text" v-model="form.judul" required placeholder="Masukkan judul artikel">
+                    </p>
+                    <p>
+                        <label>Isi Artikel</label>
+                        <textarea v-model="form.isi" required placeholder="Masukkan isi konten"></textarea>
+                    </p>
+                    <p>
+                        <button type="submit" class="btn btn-success">Simpan</button>
+                        <button type="button" class="btn btn-secondary" @click="closeModal">Batal</button>
+                    </p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="[https://unpkg.com/vue@3/dist/vue.global.js](https://unpkg.com/vue@3/dist/vue.global.js)"></script>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    artikel: [],
+                    showModal: false,
+                    // Endpoint URL API dari backend CodeIgniter 4
+                    apiUrl: 'http://localhost:8080/post', 
+                    form: {
+                        judul: '',
+                        isi: ''
+                    }
+                }
+            },
+            methods: {
+                // Method untuk mengambil data dari REST API
+                fetchData() {
+                    fetch(this.apiUrl)
+                        .then(response => response.json())
+                        .then(data => {
+                            this.artikel = data;
+                        })
+                        .catch(error => {
+                            console.error("Gagal memuat API:", error);
+                        });
+                },
+                // Method untuk menyimpan data baru via POST request
+                saveArtikel() {
+                    fetch(this.apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: new URLSearchParams(this.form)
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        this.fetchData(); // Refresh list data
+                        this.closeModal(); // Tutup modal
+                    })
+                    .catch(error => console.error("Gagal menyimpan data:", error));
+                },
+                // Method untuk menghapus data via DELETE request
+                deleteArtikel(id) {
+                    if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+                        fetch(`${this.apiUrl}/${id}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(() => {
+                            this.fetchData(); // Refresh list data
+                        })
+                        .catch(error => console.error("Gagal menghapus data:", error));
+                    }
+                },
+                closeModal() {
+                    this.showModal = false;
+                    this.form.judul = '';
+                    this.form.isi = '';
+                }
+            },
+            mounted() {
+                // Otomatis jalankan fetch data saat aplikasi siap
+                this.fetchData(); 
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+
+```
+
+---
+
+### 3. Styling Modal dan Komponen (CSS)
+
+Untuk membuat tampilan tabel rapi dan efek transparan *overlay* pada modal pop-up, tambahkan kode berikut ke dalam file `style.css`.
+
+* Buat file bernama `style.css` pada folder yang sama:
+
+```css
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+    background-color: #f9f9f9;
+}
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.table-data {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+}
+.table-data th, .table-data td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+}
+.table-data th {
+    background-color: #f2f2f2;
+}
+.btn {
+    padding: 8px 12px;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+}
+.btn-primary { background: #007bff; color: white; }
+.btn-success { background: #28a745; color: white; }
+.btn-danger { background: #dc3545; color: white; }
+.btn-secondary { background: #6c757d; color: white; }
+
+/* Styling Komponen Modal */
+.modal {
+    display: block; 
+    position: fixed;
+    z-index: 1;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.4);
+}
+.modal-content {
+    background-color: #fefefe;
+    margin: 15% auto;
+    padding: 20px;
+    border: 1px solid #888;
+    width: 500px;
+    border-radius: 5px;
+}
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close:hover { color: black; }
+input[type="text"], textarea {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    box-sizing: border-box;
+}
+
+```
+
+#### 📸 Hasil Integrasi Frontend VueJS & Modal Tambah Data
+
+Berikut adalah tampilan halaman depan dashboard yang dikelola secara penuh menggunakan VueJS ketika komponen form tambah data diaktifkan dalam bentuk modal pop-up:
+
+---
+
+## 📝 Kesimpulan
+
+Melalui praktikum Modul 11 ini, pembuatan antarmuka aplikasi menjadi sangat interaktif berkat penerapan **VueJS 3**. Fitur *reactive data binding* (`v-model`) mempermudah sinkronisasi inputan form secara berkala, sementara direktif struktural seperti `v-for` dan `v-if` mengotomatisasi rendering list tabel data dan penataan kondisi modal *pop-up* secara instan langsung dari data JSON hasil request fungsi `fetch()`.
