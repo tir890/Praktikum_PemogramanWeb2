@@ -1488,6 +1488,340 @@ Melalui praktikum Modul 12, aplikasi frontend telah sukses bertransformasi menja
 
 ```
 
+```
+
+# Lab 8: Web Programming - Modul 13: VueJS Autentikasi dan Navigation Guards (SPA Security)
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework VueJS 3** pada folder `lab8_vuejs`. Modul ini berfokus pada implementasi fitur keamanan halaman di sisi klien (*Client-Side Security*) menggunakan mekanisme **Navigation Guards** untuk memproteksi rute administrasi artikel dari pengguna yang belum terautentikasi.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep keamanan rute pada arsitektur Single Page Application (SPA).
+2. Memahami cara kerja dan implementasi **Navigation Guards (`router.beforeEach`)** pada Vue Router.
+3. Mampu mengintegrasikan modul Login dan Logout dengan REST API backend menggunakan library **Axios**.
+
 ---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Komponen Halaman Login (`Login.js`)
+Komponen ini menyediakan antarmuka form bagi pengguna untuk memasukkan *username* dan *password*, lalu mengirimkannya ke backend API menggunakan Axios.
+
+* Buat file baru bernama `Login.js` di dalam folder proyek `lab8_vuejs`:
+
+```javascript
+export default {
+    template: `
+        <div class="login-container">
+            <h2>Sign In Administrator</h2>
+            <div v-if="errorMsg" class="alert alert-danger">{{ errorMsg }}</div>
+            <form @submit.prevent="handleLogin">
+                <p>
+                    <label>Username</label>
+                    <input type="text" v-model="username" required placeholder="Masukkan username">
+                </p>
+                <p>
+                    <label>Password</label>
+                    <input type="password" v-model="password" required placeholder="Masukkan password">
+                </p>
+                <p>
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </p>
+            </form>
+        </div>
+    `,
+    data() {
+        return {
+            username: '',
+            password: '',
+            errorMsg: ''
+        }
+    },
+    methods: {
+        handleLogin() {
+            // Simulasi/Implementasi HTTP POST Request menggunakan Axios ke Endpoint Auth Backend
+            axios.post('http://localhost:8080/auth/login', {
+                username: this.username,
+                password: this.password
+            })
+            .then(response => {
+                if (response.data.success) {
+                    // Menyimpan token atau status login ke dalam localStorage browser
+                    localStorage.setItem('user_logged_in', 'true');
+                    localStorage.setItem('username', this.username);
+                    
+                    // Alihkan halaman ke kelola artikel dan segarkan status navbar
+                    this.$router.push('/artikel').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    this.errorMsg = response.data.message || 'Kredensial salah!';
+                }
+            })
+            .catch(error => {
+                this.errorMsg = 'Gagal terhubung ke server autentikasi backend.';
+                console.error(error);
+            });
+        }
+    }
+};
+
+```
+
+---
+
+### 2. Konfigurasi Vue Router dan Proteksi Rute (`index.html`)
+
+Modifikasi pemetaan rute pada berkas utama dengan menyisipkan properti `meta: { requiresAuth: true }` untuk rute yang ingin dilindungi, serta tambahkan interceptor `router.beforeEach()`.
+
+* Buka file `index.html` dan sesuaikan blok tag `<script>` utamanya menjadi seperti berikut:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SPA Security - Vue Router Navigation Guards</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="[https://unpkg.com/axios/dist/axios.min.js](https://unpkg.com/axios/dist/axios.min.js)"></script>
+</head>
+<body>
+    <div id="app">
+        <nav class="navbar">
+            <router-link to="/" class="nav-item">Beranda</router-link>
+            <router-link to="/artikel" class="nav-item">Kelola Artikel</router-link>
+            <router-link to="/about" class="nav-item">About</router-link>
+            
+            <a href="#" v-if="isLoggedIn" @click.prevent="handleLogout" class="nav-item logout-btn">Logout ({{ currentUser }})</a>
+            <router-link to="/login" v-else class="nav-item login-btn">Login</router-link>
+        </nav>
+
+        <main class="content-wrapper">
+            <router-view></router-view>
+        </main>
+    </div>
+
+    <script src="[https://unpkg.com/vue@3/dist/vue.global.js](https://unpkg.com/vue@3/dist/vue.global.js)"></script>
+    <script src="[https://unpkg.com/vue-router@4/dist/vue-router.global.js](https://unpkg.com/vue-router@4/dist/vue-router.global.js)"></script>
+
+    <script type="module">
+        import Home from './Home.js';
+        import Artikel from './Artikel.js';
+        import About from './About.js';
+        import Login from './Login.js';
+
+        const routes = [
+            { path: '/', component: Home },
+            { path: '/about', component: About, meta: { requiresAuth: true } }, // Terproteksi
+            { path: '/artikel', component: Artikel, meta: { requiresAuth: true } }, // Terproteksi
+            { path: '/login', component: Login }
+        ];
+
+        const router = VueRouter.createRouter({
+            history: VueRouter.createWebHashHistory(),
+            routes
+        });
+
+        // --- IMPLEMENTASI NAVIGATION GUARDS (Mekanisme Intersepsi Rute) ---
+        router.beforeEach((to, from, next) => {
+            const isAuthenticated = localStorage.getItem('user_logged_in') === 'true';
+
+            // Jika rute tujuan membutuhkan autentikasi dan user belum login
+            if (to.matched.some(record => record.meta.requiresAuth)) {
+                if (!isAuthenticated) {
+                    // Paksa alihkan tujuan (redirect) ke halaman login
+                    next('/login');
+                } else {
+                    next(); // Izinkan akses rute
+                }
+            } else {
+                next(); // Izinkan akses rute publik
+            }
+        });
+
+        const app = Vue.createApp({
+            data() {
+                return {
+                    isLoggedIn: localStorage.getItem('user_logged_in') === 'true',
+                    currentUser: localStorage.getItem('username') || ''
+                }
+            },
+            methods: {
+                handleLogout() {
+                    if (confirm("Apakah Anda yakin ingin keluar dari sistem?")) {
+                        localStorage.removeItem('user_logged_in');
+                        localStorage.removeItem('username');
+                        this.isLoggedIn = false;
+                        this.$router.push('/login').then(() => {
+                            window.location.reload();
+                        });
+                    }
+                }
+            }
+        });
+        app.use(router);
+        app.mount('#app');
+    </script>
+</body>
+</html>
+
+```
+
+---
+
+### 3. Pembaruan CSS Komponen Keamanan (`style.css`)
+
+Tambahkan rule CSS berikut ke dalam `style.css` untuk merapikan visual form login serta komponen pemberitahuan (*alert*):
+
+```css
+.login-container {
+    max-width: 400px;
+    margin: 50px auto;
+    padding: 25px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+.alert-danger {
+    background-color: #fed7d7;
+    color: #9b2c2c;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    font-size: 14px;
+}
+.logout-btn {
+    margin-left: auto;
+    background-color: #e53e3e;
+    border-radius: 4px;
+}
+.logout-btn:hover {
+    background-color: #c53030 !important;
+}
+
+```
+
+---
+
+## 🔍 Alur Kerja Fungsional Sistem Keamanan
+
+1. **`router.beforeEach`**: Bertindak sebagai pos pemeriksaan gerbang rute di sisi frontend browser. Setiap kali pengguna mencoba mengetikkan URL atau mengklik menu rute internal seperti `/artikel`, fungsi ini mencegatnya terlebih dahulu untuk memeriksa ketersediaan variabel token `user_logged_in` di `localStorage`. Jika tidak ditemukan, rute digagalkan dan dialihkan ke `/login`.
+2. **Axios HTTP Post**: Digunakan untuk mengirim data kredensial form secara *asynchronous* langsung ke server REST API backend tanpa mengganggu state UI aplikasi utama, memberikan respons yang cepat dan penanganan umpan balik pesan kesalahan yang dinamis.
+
+#### 📸 Hasil Pengujian Sistem Keamanan (Navigation Guards)
+
+Berikut adalah visualisasi penolakan rute otomatis saat pengguna anonim dipaksa kembali ke halaman login ketika mencoba mengakses halaman admin secara langsung:
+
+---
+
+## 📝 Kesimpulan
+
+Melalui praktikum Modul 13 ini, arsitektur *Client-Side Security* sukses diimplementasikan pada Single Page Application (SPA). Kolaborasi antara penampung data lokal browser (`localStorage`) dan interceptor rute global **Vue Router Navigation Guards** (`router.beforeEach`) terbukti efektif memisahkan dan memproteksi hak akses komponen privat dengan komponen publik secara instan tanpa perlu menunggu verifikasi siklus render halaman dari web server backend.
+
+```
+
+```
+
+# Lab 8: Web Programming - Modul 14: Keamanan API, Autentikasi Token, dan Axios Interceptors
+
+Repository ini merupakan bagian akhir dari rangkaian praktikum pemrograman web menggunakan kolaborasi **Backend CodeIgniter 4** (`lab7_php_ci`) dan **Frontend VueJS 3** (`lab8_vuejs`). Modul 14 berfokus pada implementasi pengamanan berlapis menggunakan **Token-Based Authentication** di sisi server dan **Axios Interceptors** di sisi klien.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep keamanan RESTful API menggunakan Token-Based Authentication.
+2. Mampu mengimplementasikan **Filters** pada CodeIgniter 4 untuk memproteksi endpoint API dari manipulasi data ilegal.
+3. Mampu mengonfigurasi **Axios Interceptors** pada VueJS 3 untuk menyuntikkan token otorisasi secara otomatis di latar belakang sistem.
+4. Mampu menganalisis perbedaan mendasar antara perlindungan Client-Side Security dan Server-Side Security.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Sisi Server: Registrasi Filter Autentikasi Token (CodeIgniter 4)
+Untuk melindungi endpoint REST API (`/post`) dari akses luar via tools seperti Postman, dibuat sebuah kelas Filter yang bertugas memeriksa validitas token di setiap request HTTP header.
+
+* **Membuat Auth Filter:** Pastikan filter memeriksa baris header `Authorization: Bearer <token>`. Jika token tidak ada atau tidak valid, server akan mengembalikan status **HTTP 401 Unauthorized**.
+* **Konfigurasi Routing Filters (`app/Config/Filters.php`):** Register filter tersebut agar aktif khusus pada method manipulasi data (`POST`, `PUT`, `DELETE`):
+
+```php
+public $aliases = [
+    'authFilter' => \App\Filters\AuthFilter::class,
+];
+
+// Menerapkan filter pada endpoint /post untuk method tertentu
+public $filters = [
+    'authFilter' => ['before' => ['post', 'post/*', 'admin/*']],
+];
+
+```
+
+---
+
+### 2. Sisi Klien: Konfigurasi Axios Interceptors (VueJS 3)
+
+Agar aplikasi frontend tidak perlu menyisipkan token secara manual di setiap fungsi CRUD, kita memanfaatkan **Axios Interceptors** untuk memotong (*intercept*) request sebelum dikirim dan menempelkan Token Bearer secara otomatis.
+
+* Buka berkas utama VueJS kamu (`index.html` atau file konfigurasi JavaScript terkait) dan tambahkan konfigurasi global Axios berikut sebelum aplikasi melakukan request data:
+
+```javascript
+// --- IMPLEMENTASI AXIOS INTERCEPTORS ---
+axios.interceptors.request.use(
+    config => {
+        // Mengambil token yang tersimpan di localStorage saat login sukses
+        const token = localStorage.getItem('auth_token');
+        
+        if (token) {
+            // Menyuntikkan Bearer Token ke dalam HTTP Header Authorization
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        return config;
+    },
+    error => {
+        return Promise.reject(error);
+    }
+);
+
+```
+
+* **Modifikasi Aksi CRUD Menggunakan Axios:** Ubah pemanggilan `fetch()` sebelumnya pada fungsi `saveArtikel` dan `deleteArtikel` di komponen `Artikel.js` dengan library `axios` agar interceptor ini dapat bekerja:
+
+```javascript
+// Contoh implementasi hapus data dengan Axios
+deleteArtikel(id) {
+    if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+        axios.delete(`${this.apiUrl}/${id}`)
+            .then(response => {
+                this.fetchData(); // Muat ulang tabel jika sukses
+            })
+            .catch(error => {
+                if(error.response.status === 401) {
+                    alert("Sesi Anda habis atau Anda tidak memiliki akses (401 Unauthorized)!");
+                }
+            });
+    }
+}
+
+```
+
+---
+
+## 🔍 Perbedaan Analisis Keamanan SPA
+
+Praktikum ini melengkapi celah keamanan yang ada pada modul sebelumnya. Berikut adalah perbedaan mendasar dari kedua lapisan keamanan yang telah diterapkan:
+
+| Komponen Pembeda | Vue Router Navigation Guards (Sisi Klien) | CodeIgniter Filters (Sisi Server) |
+| --- | --- | --- |
+| **Lokasi Eksekusi** | Browser Pengguna (Client Side) | Web Server / Hosting (Server Side) |
+| **Fungsi Utama** | Mengatur visibilitas dan navigasi antarmuka/komponen UI halaman web. | Melindungi integritas data base dan endpoint resource REST API asli. |
+| **Karakteristik** | Hanya mengamankan apa yang dilihat user (*View Layer*). Masih bisa ditembus menggunakan tools REST Client eksternal. | Mengamankan *data layer* secara mutlak. Menolak request ilegal terlepas dari apa pun aplikasi client yang menggunakannya. |
+
+#### 📸 Bukti Pengujian Keamanan End-to-End
+
+Berikut adalah lampiran bukti pengujian transmisi data aman yang memperlihatkan token otorisasi terselubung di dalam Network HTTP Header:
+
+---
+
+## 📝 Kesimpulan Akhir Praktikum Web (Modul 5-14)
+
+Melalui implementasi **Modul 14**, sistem web portal berita berbasis **Separation of Concerns (SoC)** telah selesai dibangun dengan sempurna. Penggabungan antara **Vue Router Navigation Guards** dan **CodeIgniter Filters Token Auth** menciptakan ekosistem aplikasi yang tidak hanya memiliki performa tinggi (*Single Page Application*) dan interaktif, tetapi juga memiliki proteksi keamanan berlapis yang valid dan kokoh baik dari manipulasi antarmuka di sisi browser maupun serangan manipulasi data dari luar server.
 
 ```
