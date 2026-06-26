@@ -629,4 +629,202 @@ Berikut adalah tampilan halaman artikel ketika dimuat menggunakan mekanisme pena
 
 Penerapan **AJAX (Asynchronous JavaScript and XML)** di CodeIgniter 4 secara signifikan mampu meningkatkan *User Experience* (UX) karena pembaruan konten tabel dan aksi hapus data terjadi di latar belakang (*background*) tanpa memaksa browser memuat ulang (*reload*) keseluruhan halaman. Penanganan data dari server dijembatani menggunakan representasi objek data terstruktur berformat **JSON** melalui method `$this->response->setJSON()`.
 
+
+# Lab 7: Web Programming - Modul 9: Implementasi AJAX Pagination dan Search
+
+Repository ini merupakan kelanjutan dari praktikum pemrograman web menggunakan **Framework CodeIgniter 4** pada folder `lab7_php_ci`. Modul ini berfokus pada implementasi AJAX untuk menangani fitur perpindahan halaman (Pagination) dan pencarian data (Search) artikel yang terintegrasi dengan filter kategori secara dinamis tanpa muat ulang (*reload*) halaman.
+
+## 📌 Tujuan Praktikum
+1. Memahami konsep dasar manipulasi komponen Pagination dan Search menggunakan Request AJAX.
+2. Mampu mengonstruksi payload respons berformat JSON yang membawa data relasional, tautan paging, dan parameter pencarian pada CodeIgniter 4.
+3. Meningkatkan performa aplikasi serta kualitas *User Experience* (UX) melalui pemrosesan data asinkron.
+
+---
+
+## 💻 Langkah-Langkah Praktikum
+
+### 1. Modifikasi Controller Artikel
+Kita mengubah method `admin_index()` pada Controller `Artikel.php` agar mampu mendeteksi jenis request. Jika request dikirim via AJAX, server akan merespons dengan data JSON yang berisi daftar artikel hasil filter/pencarian beserta konfigurasi tautan paginasinya.
+
+* Buka file `app/Controllers/Artikel.php` dan sesuaikan method `admin_index()` menjadi seperti berikut:
+
+```php
+public function admin_index()
+{
+    $title = 'Daftar Artikel (Admin)';
+    $model = new ArtikelModel();
+    
+    // Menangkap parameter input query string
+    $q = $this->request->getVar('q') ?? '';
+    $kategori_id = $this->request->getVar('kategori_id') ?? '';
+    $page = $this->request->getVar('page') ?? 1;
+    
+    // Membangun query builder dengan join tabel kategori
+    $builder = $model->table('artikel')
+                     ->select('artikel.*, kategori.nama_kategori')
+                     ->join('kategori', 'kategori.id_kategori = artikel.id_kategori');
+    
+    // Filter pencarian berdasarkan kata kunci judul jika diinputkan
+    if ($q != '') {
+        $builder->like('artikel.judul', $q);
+    }
+    
+    // Filter berdasarkan kategori jika dipilih
+    if ($kategori_id != '') {
+        $builder->where('artikel.id_kategori', $kategori_id);
+    }
+    
+    // Menangani kembalian data berformat JSON khusus untuk request AJAX
+    if ($this->request->isAJAX()) {
+        $data = [
+            'artikel' => $builder->paginate(5, 'default', $page),
+            'pager'   => $model->pager->links('default', 'bootstrap_full') // Menggunakan template link bootstrap
+        ];
+        return $this->response->setJSON($data);
+    }
+    
+    // Mengambil data kategori untuk dikirim ke view pertama kali
+    $kategoriModel = new \App\Models\KategoriModel(); 
+    $data = [
+        'title'    => $title,
+        'kategori' => $kategoriModel->findAll()
+    ];
+    
+    return view('artikel/admin_index', $data);
+}
+
 ```
+
+---
+
+### 2. Modifikasi View Halaman Admin
+
+Ubah struktur tabel pada halaman view agar isi body tabel (`<tbody>`) dan wadah navigasi halaman (*pagination container*) di-render secara dinamis menggunakan jQuery setelah menerima data JSON dari server.
+
+* Buka file `app/Views/artikel/admin_index.php` dan sesuaikan strukturnya menjadi seperti berikut:
+
+```html
+<?= $this->include('template/admin_header'); ?>
+
+<h1><?= $title; ?></h1>
+
+<form id="searchForm" class="form-inline mb-3">
+    <input type="text" id="searchBox" class="form-control mr-2" placeholder="Cari judul artikel...">
+    
+    <select id="categoryFilter" class="form-control mr-2">
+        <option value="">-- Semua Kategori --</option>
+        <?php foreach($kategori as $k): ?>
+            <option value="<?= $k['id_kategori']; ?>"><?= $k['nama_kategori']; ?></option>
+        <?php endforeach; ?>
+    </select>
+    
+    <button type="submit" class="btn btn-primary">Cari</button>
+</form>
+
+<table class="table-data" id="artikelTable">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Judul</th>
+            <th>Kategori</th>
+            <th>Status</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        </tbody>
+</table>
+
+<div id="paginationContainer" class="mt-3"></div>
+
+<script src="<?= base_url('assets/js/jquery-3.6.0.min.js') ?>"></script>
+<script>
+$(document).ready(function() {
+    const tableBody = $('#artikelTable tbody');
+    const paginationContainer = $('#paginationContainer');
+    const searchForm = $('#searchForm');
+    const searchBox = $('#searchBox');
+    const categoryFilter = $('#categoryFilter');
+
+    // Fungsi utama untuk melakukan fetch data dari server
+    function fetchData(url) {
+        tableBody.html('<tr><td colspan="5">Sedang memuat data...</td></tr>');
+        
+        $.ajax({
+            url: url,
+            method: 'GET',
+            dataType: 'json',
+            success: function(response) {
+                // 1. Render data tabel artikel
+                let tableHtml = '';
+                if(response.artikel.length > 0) {
+                    response.artikel.forEach(row => {
+                        tableHtml += '<tr>';
+                        tableHtml += '<td>' + row.id + '</td>';
+                        tableHtml += '<td>' + row.judul + '</td>';
+                        tableHtml += '<td>' + (row.nama_kategori ? row.nama_kategori : 'Tanpa Kategori') + '</td>';
+                        tableHtml += '<td>' + row.status + '</td>';
+                        tableHtml += '<td>';
+                        tableHtml += '<a href="<?= base_url('admin/artikel/edit/') ?>' + row.id + '" class="btn btn-primary">Ubah</a> ';
+                        tableHtml += '<a href="<?= base_url('admin/artikel/delete/') ?>' + row.id + '" class="btn btn-danger btn-delete" data-id="'+row.id+'">Hapus</a>';
+                        tableHtml += '</td>';
+                        tableHtml += '</tr>';
+                    });
+                } else {
+                    tableHtml = '<tr><td colspan="5">Data tidak ditemukan.</td></tr>';
+                }
+                tableBody.html(tableHtml);
+
+                // 2. Render komponen links pagination dinamis
+                paginationContainer.html(response.pager);
+            },
+            error: function() {
+                tableBody.html('<tr><td colspan="5">Gagal memuat data dari server.</td></tr>');
+            }
+        });
+    }
+
+    // Intersepsi submit form pencarian
+    searchForm.on('submit', function(e) {
+        e.preventDefault();
+        const q = searchBox.val();
+        const kategori_id = categoryFilter.val();
+        fetchData(`<?= base_url('admin/artikel') ?>?q=${q}&kategori_id=${kategori_id}`);
+    });
+
+    // Otomatis melakukan pencarian saat filter kategori diubah
+    categoryFilter.on('change', function() {
+        searchForm.trigger('submit');
+    });
+
+    // Intersepsi klik pada tautan pagination agar link berpindah secara asynchronous
+    $(document).on('click', '#paginationContainer a', function(e) {
+        e.preventDefault();
+        const url = $(this).attr('href');
+        if (url && url !== '#') {
+            fetchData(url);
+        }
+    });
+
+    // Initial Load: Memuat data pertama kali saat halaman dibuka
+    fetchData('<?= base_url('admin/artikel') ?>');
+});
+</script>
+
+<?= $this->include('template/admin_footer'); ?>
+
+```
+
+#### 📸 Hasil Pengujian AJAX Pagination & Search
+
+Berikut adalah tampilan halaman administrasi artikel yang mengintegrasikan pencarian kata kunci, penyaringan kategori, dan navigasi halaman berbasis teknologi AJAX:
+
+---
+
+## 📝 Kesimpulan
+
+Melalui praktikum Modul 9 ini, fitur pencarian dan pagination ditingkatkan fungsionalitasnya dengan menggabungkan query relasional (`JOIN`) antara tabel `artikel` dan `kategori`. Dengan memanfaatkan penanganan event klik tautan (`event.preventDefault()`) dan manipulasi DOM menggunakan jQuery, transisi perpindahan halaman serta penyaringan data dapat berjalan mulus tanpa interupsi reload browser penuh.
+
+```
+
+---
